@@ -206,45 +206,123 @@ function Raycaster:prepareSprites(entities, player)
     end)
 end
 
+-- 16x16 chaos gremlin pixel art.
+-- 0 = transparent, colour indices below.
+local GREMLIN_PALETTE = {
+    [1] = {0.05, 0.05, 0.05},   -- dark outline
+    [2] = {0.15, 0.55, 0.08},   -- skin green
+    [3] = {0.25, 0.80, 0.15},   -- highlight green
+    [4] = {1.00, 1.00, 1.00},   -- eye white
+    [5] = {0.90, 0.08, 0.08},   -- red iris / pupil
+    [6] = {0.65, 0.04, 0.04},   -- open-mouth red
+    [7] = {1.00, 0.95, 0.80},   -- teeth
+    [8] = {0.40, 0.25, 0.00},   -- horn brown
+    [9] = {1.00, 0.82, 0.00},   -- claw / horn-tip yellow
+}
+local GREMLIN_DEAD_PALETTE = {
+    [1] = {0.08, 0.08, 0.08},
+    [2] = {0.30, 0.30, 0.30},
+    [3] = {0.42, 0.42, 0.42},
+    [4] = {0.75, 0.75, 0.75},
+    [5] = {0.50, 0.50, 0.50},
+    [6] = {0.35, 0.35, 0.35},
+    [7] = {0.65, 0.65, 0.65},
+    [8] = {0.25, 0.25, 0.25},
+    [9] = {0.55, 0.55, 0.55},
+}
+local GREMLIN_SPRITE = {
+--   1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16
+    {0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0}, -- row  1  horn tips
+    {0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0}, -- row  2  horns
+    {0, 1, 8, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 8, 1, 0}, -- row  3  horn bases
+    {1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1}, -- row  4  head outline
+    {1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1}, -- row  5  forehead
+    {1, 2, 4, 4, 2, 2, 2, 3, 3, 2, 2, 2, 4, 4, 2, 1}, -- row  6  eye whites
+    {1, 2, 4, 5, 4, 2, 2, 2, 2, 2, 2, 4, 5, 4, 2, 1}, -- row  7  pupils
+    {1, 2, 4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 2, 1}, -- row  8  eye whites
+    {1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1}, -- row  9  cheeks
+    {1, 2, 2, 1, 7, 7, 2, 2, 2, 2, 7, 7, 1, 2, 2, 1}, -- row 10  top teeth
+    {1, 2, 2, 1, 6, 6, 6, 6, 6, 6, 6, 6, 1, 2, 2, 1}, -- row 11  open mouth
+    {1, 2, 2, 1, 7, 7, 6, 6, 6, 6, 7, 7, 1, 2, 2, 1}, -- row 12  bottom teeth
+    {0, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 0}, -- row 13  chin
+    {0, 0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 0, 0}, -- row 14  body
+    {0, 9, 1, 2, 2, 1, 0, 0, 0, 0, 1, 2, 2, 1, 9, 0}, -- row 15  arms / claws
+    {0, 9, 9, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 9, 9, 0}, -- row 16  claw tips
+}
+local GREMLIN_ROWS = 16
+
 function Raycaster:renderEntities(player)
     local screenWidth = love.graphics.getWidth()
     local screenHeight = love.graphics.getHeight()
-    
+
     for _, sprite in ipairs(self.sprites) do
-        local entity = sprite.entity
+        local entity  = sprite.entity
         local distance = sprite.distance
-        local angle = sprite.angle
-        
-        -- Calculate sprite position on screen
-        local screenX = (math.tan(angle) / math.tan(math.pi/6)) * (screenWidth / 2) + (screenWidth / 2)
-        
-        -- Calculate sprite size based on distance
-        local size = math.min(500, math.floor(800 / distance))
-        
-        -- Calculate sprite screen boundaries
+        local angle   = sprite.angle
+
+        -- Billboard screen position and size
+        local screenX  = (math.tan(angle) / math.tan(math.pi/6)) * (screenWidth / 2) + (screenWidth / 2)
+        local size     = math.min(500, math.floor(800 / distance))
         local drawStartX = math.floor(screenX - size / 2)
-        local drawEndX = drawStartX + size
         local drawStartY = math.floor((screenHeight - size) / 2)
-        local drawEndY = drawStartY + size
-        
-        -- Only render parts of sprite that are in front of walls
-        for stripe = math.max(0, drawStartX), math.min(screenWidth, drawEndX) do
-            -- Calculate column on screen
-            local texX = math.floor((stripe - drawStartX) / size * 64)
-            
-            -- Check if sprite stripe is in front of wall using z-buffer
-            local rayIndex = math.floor((stripe / screenWidth) * #self.zBuffer)
-            if rayIndex > 0 and rayIndex <= #self.zBuffer and distance < self.zBuffer[rayIndex] then
-                -- Draw sprite stripe
-                if entity.health <= 0 then
-                    -- Dead enemy (darker color)
-                    love.graphics.setColor(0.5, 0, 0)
-                else
-                    -- Regular enemy
-                    love.graphics.setColor(1, 0, 0)
+        local cellH    = size / GREMLIN_ROWS  -- screen height of one pixel row
+
+        local palette = (entity.health <= 0 or entity.isDying) and GREMLIN_DEAD_PALETTE or GREMLIN_PALETTE
+
+        -- Hit flash: blend toward white over the flash duration.
+        local hitBlend = 0
+        if entity.hitFlash and entity.hitFlash > 0 and entity.hitFlashTotal and entity.hitFlashTotal > 0 then
+            hitBlend = entity.hitFlash / entity.hitFlashTotal
+        end
+
+        -- Death flash: bright red pulse that fades out.
+        local deathBlend = 0
+        if entity.isDying and entity.deathTimer then
+            deathBlend = entity.deathTimer / 0.35  -- matches deathTimer initial value in main.lua
+        end
+
+        -- Perpendicular (depth-buffer) distance for this sprite.
+        -- The z-buffer stores perpendicular wall distances, so we must compare
+        -- the sprite's perpendicular depth, not its raw Euclidean distance.
+        -- For a sprite at relative angle `angle`, perpDepth = distance * cos(angle).
+        local perpDepth = distance * math.cos(angle)
+
+        -- Walk each screen stripe that belongs to this sprite
+        for stripe = math.max(0, drawStartX), math.min(screenWidth - 1, drawStartX + size) do
+            local rayIndex = math.max(1, math.floor((stripe / screenWidth) * #self.zBuffer))
+            if rayIndex <= #self.zBuffer and perpDepth < self.zBuffer[rayIndex] then
+                -- Which of the 16 sprite columns does this stripe map to?
+                local t   = (stripe - drawStartX) / size       -- 0..1
+                local col = math.floor(t * GREMLIN_ROWS) + 1   -- 1..16
+                if col >= 1 and col <= GREMLIN_ROWS then
+                    for row = 1, GREMLIN_ROWS do
+                        local idx = GREMLIN_SPRITE[row][col]
+                        if idx ~= 0 then
+                            local c   = palette[idx]
+                            local r   = c[1]
+                            local g   = c[2]
+                            local b   = c[3]
+                            -- Hit flash: blend toward white
+                            if hitBlend > 0 then
+                                r = r + (1 - r) * hitBlend
+                                g = g + (1 - g) * hitBlend
+                                b = b + (1 - b) * hitBlend
+                            end
+                            -- Death flash: surge red then fade to dark
+                            if deathBlend > 0 then
+                                r = math.min(1, r + deathBlend * 0.9)
+                                g = g * (1 - deathBlend * 0.7)
+                                b = b * (1 - deathBlend * 0.7)
+                            end
+                            love.graphics.setColor(r, g, b)
+                            love.graphics.rectangle("fill",
+                                stripe,
+                                drawStartY + (row - 1) * cellH,
+                                1,
+                                math.max(1, cellH))
+                        end
+                    end
                 end
-                
-                love.graphics.rectangle("fill", stripe, drawStartY, 1, size)
             end
         end
     end

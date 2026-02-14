@@ -52,6 +52,9 @@ function controls.keypressed(key)
         player.moveRight = true
     elseif key == "space" then
         player.isShooting = true
+    elseif key == "r" then
+        local weapon = playerWeaponsRef[currentWeaponRef.value]
+        if weapon then weapon:startReload() end
     end
 end
 
